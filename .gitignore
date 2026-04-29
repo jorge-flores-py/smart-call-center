@@ -1,0 +1,15 @@
+# Python
+venv/
+backend/venv/
+__pycache__/
+*.pyc
+
+# Variables de entorno
+.env
+backend/.env
+
+# VS Code
+.vscode/
+
+# Jupyter / Colab
+.ipynb_checkpoints/

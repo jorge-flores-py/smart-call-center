@@ -1,0 +1,215 @@
+<!doctype html>
+<html lang="es">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Smart Call Center | Dashboard Multiagente</title>
+    <link rel="stylesheet" href="./styles.css" />
+  </head>
+  <body>
+    <main class="app-shell">
+      <section class="dashboard-frame reveal">
+        <header class="dashboard-head">
+          <div class="title-block">
+            <p class="eyebrow">Smart Call Center</p>
+            <h1>RESUMEN MULTIAGENTE</h1>
+            <p class="hero-copy">
+              Ejecuta los agentes analiticos, sigue el avance de cada bloque y
+              revisa el informe ejecutivo del supervisor en una sola vista.
+            </p>
+
+            <div class="head-meta">
+              <div class="period-chip">
+                <span class="period-icon" aria-hidden="true">
+                  <svg viewBox="0 0 24 24" fill="none">
+                    <rect x="3" y="4" width="18" height="17" rx="2.5"></rect>
+                    <path d="M8 2.75v3.5M16 2.75v3.5M3 9.25h18"></path>
+                    <path d="M8 13h.01M12 13h.01M16 13h.01M8 17h.01M12 17h.01M16 17h.01"></path>
+                  </svg>
+                </span>
+                <div>
+                  <span class="meta-label">Periodo</span>
+                  <strong id="periodLabel">Cargando...</strong>
+                </div>
+              </div>
+
+              <div class="info-chip">
+                <span class="meta-label">Backend</span>
+                <strong id="backendStatus">Verificando...</strong>
+                <small id="backendMessage">Validando conexion con FastAPI.</small>
+              </div>
+
+              <div class="info-chip">
+                <span class="meta-label">Progreso</span>
+                <strong id="progressCount">0 / 7</strong>
+                <small>Agentes procesados</small>
+              </div>
+
+              <div class="info-chip">
+                <span class="meta-label">Tiempo</span>
+                <strong id="elapsedTime">00:00</strong>
+                <small id="runState">Listo para iniciar.</small>
+              </div>
+            </div>
+          </div>
+
+          <div class="control-panel">
+            <label class="filter-field">
+              <span>Vista</span>
+              <select id="viewFilter">
+                <option value="all">Todas</option>
+                <option value="operacion">Operacion</option>
+                <option value="personas">Asesores</option>
+                <option value="calidad">Calidad</option>
+                <option value="riesgo">Riesgo</option>
+                <option value="supervisor">Supervisor</option>
+              </select>
+            </label>
+
+            <label class="filter-field">
+              <span>Estado</span>
+              <select id="statusFilter">
+                <option value="all">Todos</option>
+                <option value="idle">Pendientes</option>
+                <option value="running">Ejecutando</option>
+                <option value="complete">Completados</option>
+                <option value="error">Error</option>
+              </select>
+            </label>
+
+            <div class="action-stack">
+              <button id="runAllBtn" class="primary-btn" type="button">
+                Ejecutar analisis
+              </button>
+              <button id="resetBtn" class="secondary-btn" type="button">
+                Reiniciar tablero
+              </button>
+              <a class="text-link" href="/docs" target="_blank" rel="noreferrer">
+                Ver API
+              </a>
+            </div>
+          </div>
+        </header>
+
+        <section id="kpiStrip" class="kpi-strip" aria-label="KPIs por agente"></section>
+
+        <section class="board-section">
+          <div class="section-head">
+            <div>
+              <p class="section-kicker">Matriz central</p>
+              <h2>ESTADO DE LOS AGENTES</h2>
+            </div>
+            <p class="section-note">
+              Vista resumida del recorrido, el tiempo de ejecucion y la senal
+              principal de cada agente.
+            </p>
+          </div>
+
+          <div class="table-shell">
+            <table class="status-table">
+              <thead>
+                <tr>
+                  <th>Bloque</th>
+                  <th>Agente</th>
+                  <th>Estado</th>
+                  <th>Duracion</th>
+                  <th>Senal principal</th>
+                  <th>Detalle</th>
+                </tr>
+              </thead>
+              <tbody id="executionMatrixBody"></tbody>
+            </table>
+          </div>
+        </section>
+
+        <section class="insight-grid">
+          <article class="mini-panel">
+            <div class="mini-panel-head">
+              <h3>EVOLUCION DE EJECUCION</h3>
+            </div>
+            <div id="timelineChart" class="timeline-chart"></div>
+          </article>
+
+          <article class="mini-panel">
+            <div class="mini-panel-head">
+              <h3>PIPELINE DEL ANALISIS</h3>
+            </div>
+            <div id="pipelineFunnel" class="pipeline-funnel"></div>
+          </article>
+
+          <article class="mini-panel">
+            <div class="mini-panel-head">
+              <h3>TASA DE CIERRE</h3>
+            </div>
+            <div id="conversionRings" class="conversion-rings"></div>
+          </article>
+        </section>
+
+        <section class="details-layout">
+          <section class="board-section">
+            <div class="section-head compact">
+              <div>
+                <p class="section-kicker">Salida analitica</p>
+                <h2>DETALLE POR AGENTE</h2>
+              </div>
+              <p class="section-note">
+                KPIs, alertas y tablas generadas por cada agente que ya corrio.
+              </p>
+            </div>
+
+            <div id="agentPanels" class="agent-panels">
+              <div class="empty-state">
+                <h3>Esperando ejecucion</h3>
+                <p>
+                  Inicia el analisis para ver el detalle de cada agente en este
+                  tablero.
+                </p>
+              </div>
+            </div>
+          </section>
+
+          <aside class="board-section supervisor-panel">
+            <div class="section-head compact">
+              <div>
+                <p class="section-kicker">Capa ejecutiva</p>
+                <h2>SUPERVISOR</h2>
+              </div>
+            </div>
+
+            <div id="supervisorStatus" class="supervisor-status idle">
+              Aun no se ejecuto el supervisor.
+            </div>
+
+            <div id="supervisorMeta" class="metric-deck compact-deck"></div>
+
+            <article id="supervisorReport" class="report-card empty-report">
+              <h3>Informe ejecutivo</h3>
+              <p>
+                Al finalizar la corrida vas a ver aqui el diagnostico general,
+                los hallazgos prioritarios y las recomendaciones accionables.
+              </p>
+            </article>
+          </aside>
+        </section>
+
+        <section class="board-section">
+          <div class="section-head compact">
+            <div>
+              <p class="section-kicker">Trazabilidad</p>
+              <h2>BITACORA DE EJECUCION</h2>
+            </div>
+          </div>
+
+          <div id="activityLog" class="activity-log">
+            <div class="log-entry neutral">
+              <span class="log-time">--:--:--</span>
+              <p>La sesion esta lista para iniciar.</p>
+            </div>
+          </div>
+        </section>
+      </section>
+    </main>
+
+    <script src="./app.js"></script>
+  </body>
+</html>

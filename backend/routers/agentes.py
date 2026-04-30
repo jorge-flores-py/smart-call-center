@@ -1,4 +1,5 @@
 from fastapi import APIRouter
+from services.supervisor_service import agente_supervisor
 from services.agentes_service import (
     agente_resumen_llamadas,
     agente_tiempos_skill,
@@ -13,6 +14,9 @@ router = APIRouter(
     tags=["Agentes"]
 )
 
+@router.get("/supervisor")
+def supervisor():
+    return agente_supervisor()
 
 @router.get("/resumen-llamadas")
 def resumen_llamadas():

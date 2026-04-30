@@ -162,3 +162,79 @@ def agente_tiempos_skill():
             ascending=False
         ).to_dict(orient="records"),
     }
+
+def agente_asesores():
+    """
+    Agente que analiza desempeño por asesor usando solo llamadas contestadas.
+
+    Calcula:
+    - total de asesores
+    - total de llamadas atendidas
+    - asesor con más llamadas
+    - asesor con mayor tiempo promedio
+    - promedio de llamadas por asesor
+    - tiempo total promedio global
+    """
+
+    df = obtener_df_agentes()
+
+    df_atendidas = df[
+        df["estado"].fillna("").str.lower() == "contestada"
+    ].copy()
+
+    resumen = (
+        df_atendidas.groupby(["id_asesor", "nombre_asesor"])
+        .agg(
+            llamadas=("id_llamada", "count"),
+            tiempo_espera_promedio=("tiempo_de_espera", "mean"),
+            tiempo_conversacion_promedio=("tiempo_conversacion", "mean"),
+            tiempo_documentacion_promedio=("tiempo_documentacion", "mean"),
+            tiempo_total_promedio=("tiempo_total", "mean"),
+        )
+        .reset_index()
+        .round(2)
+    )
+
+    asesor_mas_llamadas = resumen.sort_values(
+        "llamadas",
+        ascending=False
+    ).iloc[0]
+
+    asesor_mas_tiempo = resumen.sort_values(
+        "tiempo_total_promedio",
+        ascending=False
+    ).iloc[0]
+
+    return {
+        "agente": "desempeno_asesores",
+        "kpis": {
+            "total_asesores": int(resumen["id_asesor"].nunique()),
+            "total_llamadas_atendidas": int(len(df_atendidas)),
+            "asesor_con_mas_llamadas": {
+                "id_asesor": asesor_mas_llamadas["id_asesor"],
+                "nombre_asesor": asesor_mas_llamadas["nombre_asesor"],
+                "llamadas": int(asesor_mas_llamadas["llamadas"]),
+            },
+            "asesor_con_mayor_tiempo_promedio": {
+                "id_asesor": asesor_mas_tiempo["id_asesor"],
+                "nombre_asesor": asesor_mas_tiempo["nombre_asesor"],
+                "tiempo_total_promedio": float(asesor_mas_tiempo["tiempo_total_promedio"]),
+            },
+            "promedio_llamadas_por_asesor": round(
+                float(resumen["llamadas"].mean()),
+                2
+            ),
+            "tiempo_total_promedio_global": round(
+                float(resumen["tiempo_total_promedio"].mean()),
+                2
+            ),
+        },
+        "top_asesores_por_llamadas": resumen.sort_values(
+            "llamadas",
+            ascending=False
+        ).head(10).to_dict(orient="records"),
+        "top_asesores_por_tiempo": resumen.sort_values(
+            "tiempo_total_promedio",
+            ascending=False
+        ).head(10).to_dict(orient="records"),
+    }

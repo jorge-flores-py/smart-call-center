@@ -3,7 +3,8 @@ from services.agentes_service import (
     agente_resumen_llamadas,
     agente_tiempos_skill,
     agente_asesores,
-    agente_calidad
+    agente_calidad,
+    agente_eficiencia
 )
 
 router = APIRouter(
@@ -30,3 +31,8 @@ def asesores():
 @router.get("/calidad")
 def calidad():
     return agente_calidad()
+
+
+@router.get("/eficiencia")
+def eficiencia():
+    return agente_eficiencia()

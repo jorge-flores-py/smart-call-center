@@ -332,3 +332,174 @@ def agente_calidad():
             ascending=True
         ).to_dict(orient="records"),
     }
+
+def agente_eficiencia():
+    """
+    Agente principal de eficiencia operativa.
+
+    Analiza:
+    - tiempo promedio de espera
+    - tiempo total promedio
+    - percentil 95 del tiempo total
+    - tasa de abandono
+    - skills con espera alta
+    - departamentos con abandono alto
+    - casos críticos operativos
+    """
+
+    df = obtener_df_agentes()
+
+    total_llamadas = len(df)
+
+    tiempo_espera_promedio = df["tiempo_de_espera"].mean()
+    tiempo_total_promedio = df["tiempo_total"].mean()
+    tiempo_total_p95 = df["tiempo_total"].quantile(0.95)
+
+    total_abandonos = int(df["flag_abandono"].sum())
+
+    tasa_abandono = round(
+        total_abandonos / total_llamadas * 100,
+        2
+    ) if total_llamadas > 0 else 0
+
+    # ============================
+    # Análisis por skill
+    # ============================
+
+    eficiencia_por_skill = (
+        df.groupby("skill")
+        .agg(
+            llamadas=("id_llamada", "count"),
+            tiempo_espera_promedio=("tiempo_de_espera", "mean"),
+            tiempo_total_promedio=("tiempo_total", "mean"),
+            abandonos=("flag_abandono", "sum"),
+        )
+        .reset_index()
+        .round(2)
+    )
+
+    eficiencia_por_skill["tasa_abandono"] = (
+        eficiencia_por_skill["abandonos"]
+        / eficiencia_por_skill["llamadas"]
+        * 100
+    ).round(2)
+
+    # ============================
+    # Análisis por departamento
+    # ============================
+
+    eficiencia_por_departamento = (
+        df.groupby("departamento")
+        .agg(
+            llamadas=("id_llamada", "count"),
+            tiempo_espera_promedio=("tiempo_de_espera", "mean"),
+            tiempo_total_promedio=("tiempo_total", "mean"),
+            abandonos=("flag_abandono", "sum"),
+        )
+        .reset_index()
+        .round(2)
+    )
+
+    eficiencia_por_departamento["tasa_abandono"] = (
+        eficiencia_por_departamento["abandonos"]
+        / eficiencia_por_departamento["llamadas"]
+        * 100
+    ).round(2)
+
+    # ============================
+    # Alertas
+    # ============================
+
+    alertas = []
+
+    skills_espera_alta = eficiencia_por_skill[
+        eficiencia_por_skill["tiempo_espera_promedio"] > tiempo_espera_promedio * 1.3
+    ]
+
+    for _, row in skills_espera_alta.iterrows():
+        alertas.append({
+            "tipo": "skill_con_espera_alta",
+            "skill": row["skill"],
+            "valor": float(row["tiempo_espera_promedio"]),
+            "comentario": (
+                f"El skill {row['skill']} presenta una espera promedio de "
+                f"{row['tiempo_espera_promedio']} segundos, superando en más de 30% "
+                f"el promedio general de {round(tiempo_espera_promedio, 2)} segundos."
+            )
+        })
+
+    departamentos_abandono_alto = eficiencia_por_departamento[
+        eficiencia_por_departamento["tasa_abandono"] > tasa_abandono * 1.3
+    ]
+
+    for _, row in departamentos_abandono_alto.iterrows():
+        alertas.append({
+            "tipo": "departamento_con_abandono_alto",
+            "departamento": row["departamento"],
+            "valor": float(row["tasa_abandono"]),
+            "comentario": (
+                f"El departamento {row['departamento']} presenta una tasa de abandono "
+                f"de {row['tasa_abandono']}%, superior al promedio general de "
+                f"{tasa_abandono}%."
+            )
+        })
+
+    # ============================
+    # Casos críticos
+    # ============================
+
+    casos_criticos = df[
+        (df["tiempo_total"] > tiempo_total_p95)
+        | (df["flag_abandono"] == 1)
+    ].copy()
+
+    columnas_casos = [
+        "id_llamada",
+        "fecha_y_hora",
+        "skill",
+        "estado",
+        "departamento",
+        "municipio",
+        "tiempo_de_espera",
+        "tiempo_conversacion",
+        "tiempo_documentacion",
+        "tiempo_total",
+        "flag_abandono",
+    ]
+
+    top_casos_criticos = (
+        casos_criticos[columnas_casos]
+        .sort_values("tiempo_total", ascending=False)
+        .head(10)
+        .copy()
+    )
+
+    top_casos_criticos["fecha_y_hora"] = top_casos_criticos["fecha_y_hora"].astype(str)
+
+    return {
+        "agente": "eficiencia_operativa",
+        "kpis": {
+            "total_llamadas": int(total_llamadas),
+            "tiempo_espera_promedio": round(float(tiempo_espera_promedio), 2),
+            "tiempo_total_promedio": round(float(tiempo_total_promedio), 2),
+            "tiempo_total_p95": round(float(tiempo_total_p95), 2),
+            "total_abandonos": total_abandonos,
+            "tasa_abandono": tasa_abandono,
+            "cantidad_alertas": len(alertas),
+            "cantidad_casos_criticos": int(len(casos_criticos)),
+        },
+        "alertas": alertas,
+        "top_skills_por_espera": eficiencia_por_skill.sort_values(
+            "tiempo_espera_promedio",
+            ascending=False
+        ).head(10).to_dict(orient="records"),
+        "top_skills_por_abandono": eficiencia_por_skill.sort_values(
+            "tasa_abandono",
+            ascending=False
+        ).head(10).to_dict(orient="records"),
+        "top_departamentos_por_abandono": eficiencia_por_departamento.sort_values(
+            "tasa_abandono",
+            ascending=False
+        ).head(10).to_dict(orient="records"),
+        "top_casos_criticos": top_casos_criticos.to_dict(orient="records"),
+    }

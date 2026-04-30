@@ -238,3 +238,97 @@ def agente_asesores():
             ascending=False
         ).head(10).to_dict(orient="records"),
     }
+def agente_calidad():
+    """
+    Agente que analiza la calidad de atención a partir de las encuestas.
+
+    Calcula:
+    - cantidad de encuestas válidas
+    - promedios de satisfacción, recomendación, claridad y solución
+    - indicador más bajo
+    - indicador más alto
+    - casos con baja satisfacción
+    - calidad promedio por skill
+    """
+
+    df = obtener_df_agentes()
+
+    df_encuestas = df.dropna(
+        subset=["satisfaccion", "recomendacion", "claridad", "solucion"],
+        how="all"
+    ).copy()
+
+    indicadores = ["satisfaccion", "recomendacion", "claridad", "solucion"]
+
+    promedios = df_encuestas[indicadores].mean().round(2).to_dict()
+
+    indicador_mas_bajo = min(promedios, key=promedios.get)
+    indicador_mas_alto = max(promedios, key=promedios.get)
+
+    total_encuestas = len(df_encuestas)
+
+    total_baja_satisfaccion = int(
+        (df_encuestas["satisfaccion"].fillna(99) <= 2).sum()
+    )
+
+    porcentaje_baja_satisfaccion = round(
+        total_baja_satisfaccion / total_encuestas * 100,
+        2
+    ) if total_encuestas > 0 else 0
+
+    calidad_por_skill = (
+        df_encuestas.groupby("skill")
+        .agg(
+            encuestas=("id_llamada", "count"),
+            satisfaccion_promedio=("satisfaccion", "mean"),
+            recomendacion_promedio=("recomendacion", "mean"),
+            claridad_promedio=("claridad", "mean"),
+            solucion_promedio=("solucion", "mean"),
+            baja_satisfaccion=("baja_satisfaccion", "sum"),
+        )
+        .reset_index()
+        .round(2)
+    )
+
+    calidad_por_skill["porcentaje_baja_satisfaccion"] = (
+        calidad_por_skill["baja_satisfaccion"]
+        / calidad_por_skill["encuestas"]
+        * 100
+    ).round(2)
+
+    skill_menor_satisfaccion = calidad_por_skill.sort_values(
+        "satisfaccion_promedio",
+        ascending=True
+    ).iloc[0]
+
+    return {
+        "agente": "calidad_atencion",
+        "kpis": {
+            "total_encuestas": int(total_encuestas),
+            "promedios": {
+                "satisfaccion": float(promedios.get("satisfaccion", 0)),
+                "recomendacion": float(promedios.get("recomendacion", 0)),
+                "claridad": float(promedios.get("claridad", 0)),
+                "solucion": float(promedios.get("solucion", 0)),
+            },
+            "indicador_mas_bajo": {
+                "indicador": indicador_mas_bajo,
+                "valor": float(promedios[indicador_mas_bajo]),
+            },
+            "indicador_mas_alto": {
+                "indicador": indicador_mas_alto,
+                "valor": float(promedios[indicador_mas_alto]),
+            },
+            "total_baja_satisfaccion": total_baja_satisfaccion,
+            "porcentaje_baja_satisfaccion": porcentaje_baja_satisfaccion,
+            "skill_menor_satisfaccion": {
+                "skill": skill_menor_satisfaccion["skill"],
+                "satisfaccion_promedio": float(skill_menor_satisfaccion["satisfaccion_promedio"]),
+                "encuestas": int(skill_menor_satisfaccion["encuestas"]),
+            },
+        },
+        "calidad_por_skill": calidad_por_skill.sort_values(
+            "satisfaccion_promedio",
+            ascending=True
+        ).to_dict(orient="records"),
+    }

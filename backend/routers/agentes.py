@@ -2,7 +2,8 @@ from fastapi import APIRouter
 from services.agentes_service import (
     agente_resumen_llamadas,
     agente_tiempos_skill,
-    agente_asesores
+    agente_asesores,
+    agente_calidad
 )
 
 router = APIRouter(
@@ -24,3 +25,8 @@ def tiempos_skill():
 @router.get("/asesores")
 def asesores():
     return agente_asesores()
+
+
+@router.get("/calidad")
+def calidad():
+    return agente_calidad()

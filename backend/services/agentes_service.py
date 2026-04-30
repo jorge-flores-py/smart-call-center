@@ -1,4 +1,33 @@
+import pandas as pd
+from sklearn.ensemble import IsolationForest
 from services.data_service import obtener_df_agentes
+
+
+def _valor_json_seguro(valor):
+    if isinstance(valor, dict):
+        return {clave: _valor_json_seguro(subvalor) for clave, subvalor in valor.items()}
+
+    if isinstance(valor, list):
+        return [_valor_json_seguro(item) for item in valor]
+
+    if isinstance(valor, tuple):
+        return [_valor_json_seguro(item) for item in valor]
+
+    if pd.isna(valor):
+        return None
+
+    if isinstance(valor, pd.Timestamp):
+        return valor.isoformat()
+
+    if hasattr(valor, "item"):
+        return valor.item()
+
+    return valor
+
+
+def _registros_json_seguros(df):
+    registros = df.to_dict(orient="records")
+    return _valor_json_seguro(registros)
 
 
 def agente_resumen_llamadas():
@@ -67,7 +96,7 @@ def agente_resumen_llamadas():
         "detalle_por_skill": resumen_skill.sort_values(
             "llamadas",
             ascending=False
-        ).to_dict(orient="records"),
+        ).pipe(_registros_json_seguros),
     }
 
 def agente_tiempos_skill():
@@ -160,7 +189,7 @@ def agente_tiempos_skill():
         "detalle_por_skill": resumen.sort_values(
             "tiempo_espera_promedio",
             ascending=False
-        ).to_dict(orient="records"),
+        ).pipe(_registros_json_seguros),
     }
 
 def agente_asesores():
@@ -232,11 +261,11 @@ def agente_asesores():
         "top_asesores_por_llamadas": resumen.sort_values(
             "llamadas",
             ascending=False
-        ).head(10).to_dict(orient="records"),
+        ).head(10).pipe(_registros_json_seguros),
         "top_asesores_por_tiempo": resumen.sort_values(
             "tiempo_total_promedio",
             ascending=False
-        ).head(10).to_dict(orient="records"),
+        ).head(10).pipe(_registros_json_seguros),
     }
 def agente_calidad():
     """
@@ -330,7 +359,7 @@ def agente_calidad():
         "calidad_por_skill": calidad_por_skill.sort_values(
             "satisfaccion_promedio",
             ascending=True
-        ).to_dict(orient="records"),
+        ).pipe(_registros_json_seguros),
     }
 
 def agente_eficiencia():
@@ -492,14 +521,123 @@ def agente_eficiencia():
         "top_skills_por_espera": eficiencia_por_skill.sort_values(
             "tiempo_espera_promedio",
             ascending=False
-        ).head(10).to_dict(orient="records"),
+        ).head(10).pipe(_registros_json_seguros),
         "top_skills_por_abandono": eficiencia_por_skill.sort_values(
             "tasa_abandono",
             ascending=False
-        ).head(10).to_dict(orient="records"),
+        ).head(10).pipe(_registros_json_seguros),
         "top_departamentos_por_abandono": eficiencia_por_departamento.sort_values(
             "tasa_abandono",
             ascending=False
-        ).head(10).to_dict(orient="records"),
-        "top_casos_criticos": top_casos_criticos.to_dict(orient="records"),
+        ).head(10).pipe(_registros_json_seguros),
+        "top_casos_criticos": _registros_json_seguros(top_casos_criticos),
+    }
+
+def agente_anomalias():
+    """
+    Agente que detecta llamadas anómalas usando Isolation Forest.
+
+    Analiza variables operativas:
+    - tiempo_de_espera
+    - tiempo_conversacion
+    - tiempo_documentacion
+    - tiempo_total
+
+    Devuelve:
+    - total de anomalías
+    - porcentaje de anomalías
+    - anomalías por skill
+    - top casos críticos
+    """
+
+    df = obtener_df_agentes()
+
+    columnas_modelo = [
+        "tiempo_de_espera",
+        "tiempo_conversacion",
+        "tiempo_documentacion",
+        "tiempo_total"
+    ]
+
+    df_modelo = df[columnas_modelo].fillna(0).copy()
+
+    modelo = IsolationForest(
+        contamination=0.02,
+        random_state=42
+    )
+
+    predicciones = modelo.fit_predict(df_modelo)
+
+    df["es_anomalia"] = predicciones
+    df["es_anomalia"] = df["es_anomalia"].apply(lambda x: 1 if x == -1 else 0)
+
+    df_anomalias = df[df["es_anomalia"] == 1].copy()
+
+    total_llamadas = len(df)
+    total_anomalias = len(df_anomalias)
+
+    porcentaje_anomalias = round(
+        total_anomalias / total_llamadas * 100,
+        2
+    ) if total_llamadas > 0 else 0
+
+    anomalias_por_skill = (
+        df_anomalias.groupby("skill")
+        .agg(
+            total_anomalias=("id_llamada", "count"),
+            tiempo_espera_promedio=("tiempo_de_espera", "mean"),
+            tiempo_conversacion_promedio=("tiempo_conversacion", "mean"),
+            tiempo_documentacion_promedio=("tiempo_documentacion", "mean"),
+            tiempo_total_promedio=("tiempo_total", "mean"),
+            baja_satisfaccion=("baja_satisfaccion", "sum"),
+        )
+        .reset_index()
+        .round(2)
+        .sort_values("total_anomalias", ascending=False)
+    )
+
+    columnas_top = [
+        "id_llamada",
+        "fecha_y_hora",
+        "skill",
+        "estado",
+        "nombre_asesor",
+        "departamento",
+        "municipio",
+        "tiempo_de_espera",
+        "tiempo_conversacion",
+        "tiempo_documentacion",
+        "tiempo_total",
+        "satisfaccion",
+        "baja_satisfaccion",
+        "es_anomalia"
+    ]
+
+    top_casos = (
+        df_anomalias[columnas_top]
+        .sort_values("tiempo_total", ascending=False)
+        .head(10)
+        .copy()
+    )
+
+    top_casos["fecha_y_hora"] = top_casos["fecha_y_hora"].astype(str)
+
+    top_skill_anomalias = (
+        _valor_json_seguro(anomalias_por_skill.iloc[0].to_dict())
+        if not anomalias_por_skill.empty
+        else {}
+    )
+
+    return {
+        "agente": "deteccion_anomalias",
+        "modelo": "IsolationForest",
+        "kpis": {
+            "total_llamadas": int(total_llamadas),
+            "total_anomalias": int(total_anomalias),
+            "porcentaje_anomalias": porcentaje_anomalias,
+            "contamination": 0.02,
+            "skill_con_mas_anomalias": top_skill_anomalias,
+        },
+        "anomalias_por_skill": _registros_json_seguros(anomalias_por_skill),
+        "top_casos_criticos": _registros_json_seguros(top_casos),
     }
